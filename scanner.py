@@ -1,115 +1,67 @@
 import boto3
 
+# -----------------------------
 # Configuration
+# -----------------------------
+
 REGION = "ap-southeast-2"
 EBS_COST_PER_GB_MONTH = 0.08
 
-# Create EC2 client
+
+# -----------------------------
+# AWS Client
+# -----------------------------
+
 ec2 = boto3.client("ec2", region_name=REGION)
 
-# -----------------------------------
-# Get EBS Volumes
-# -----------------------------------
 
-response = ec2.describe_volumes()
+# -----------------------------
+# Discovery
+# -----------------------------
 
-volumes = response["Volumes"]
+def get_volumes():
+    """Retrieve all EBS volumes from AWS."""
 
-print("EBS COST AUDIT")
-print("----------------------------")
+    volumes = []
 
-# Keep track of all existing volume IDs
-volume_ids = set()
+    paginator = ec2.get_paginator("describe_volumes")
 
-unattached_cost = 0
+    for page in paginator.paginate():
+        volumes.extend(page["Volumes"])
 
-print("\nVolumes:")
-
-for volume in volumes:
-
-    volume_id = volume["VolumeId"]
-    size = volume["Size"]
-    state = volume["State"]
-
-    volume_ids.add(volume_id)
-
-    if state == "available":
-
-        estimated_cost = size * EBS_COST_PER_GB_MONTH
-        unattached_cost += estimated_cost
-
-        print(
-            f"{volume_id}   {size} GB   UNATTACHED   "
-            f"~${estimated_cost:.2f}/month"
-        )
-
-    else:
-
-        print(
-            f"{volume_id}   {size} GB   ATTACHED"
-        )
+    return volumes
 
 
-# -----------------------------------
-# Get EBS Snapshots
-# -----------------------------------
+def get_snapshots():
+    """Retrieve all EBS snapshots owned by this account."""
 
-snapshot_response = ec2.describe_snapshots(
-    OwnerIds=["self"]
-)
+    snapshots = []
 
-snapshots = snapshot_response["Snapshots"]
+    paginator = ec2.get_paginator("describe_snapshots")
 
-orphaned_snapshot_cost = 0
+    for page in paginator.paginate(
+        OwnerIds=["self"]
+    ):
+        snapshots.extend(page["Snapshots"])
 
-print("\nSnapshots:")
-
-for snapshot in snapshots:
-
-    snapshot_id = snapshot["SnapshotId"]
-    size = snapshot["VolumeSize"]
-    source_volume = snapshot.get("VolumeId")
-
-    estimated_cost = size * EBS_COST_PER_GB_MONTH
-
-    if source_volume not in volume_ids:
-
-        orphaned_snapshot_cost += estimated_cost
-
-        print(
-            f"{snapshot_id}   {size} GB   "
-            f"ORPHANED   ~${estimated_cost:.2f}/month"
-        )
-
-    else:
-
-        print(
-            f"{snapshot_id}   {size} GB   "
-            f"SOURCE EXISTS"
-        )
+    return snapshots
 
 
-# -----------------------------------
-# Cost Summary
-# -----------------------------------
+# -----------------------------
+# Main
+# -----------------------------
 
-total_cost = unattached_cost + orphaned_snapshot_cost
+def main():
 
-print("\n----------------------------")
-print("COST SUMMARY")
-print("----------------------------")
+    volumes = get_volumes()
+    snapshots = get_snapshots()
 
-print(
-    f"Unattached volume waste: "
-    f"~${unattached_cost:.2f}/month"
-)
+    print("AWS EBS COST AUDIT")
+    print("----------------------------")
 
-print(
-    f"Orphaned snapshot waste: "
-    f"~${orphaned_snapshot_cost:.2f}/month"
-)
+    print(f"Volumes found: {len(volumes)}")
+    print(f"Snapshots found: {len(snapshots)}")
 
-print(
-    f"Potential monthly waste: "
-    f"~${total_cost:.2f}/month"
-)
+
+if __name__ == "__main__":
+    main()
