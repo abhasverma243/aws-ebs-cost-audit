@@ -96,6 +96,55 @@ def analyze_snapshots(snapshots, volume_ids):
     return findings
 
 
+def generate_report(volume_findings, snapshot_findings):
+    """Generate a cost audit report from detected findings."""
+
+    all_findings = volume_findings + snapshot_findings
+
+    total_monthly_cost = sum(
+        finding["estimated_monthly_cost"]
+        for finding in all_findings
+    )
+
+    total_annual_cost = total_monthly_cost * 12
+
+    print("\n")
+    print("=" * 55)
+    print("              AWS EBS COST AUDIT")
+    print("=" * 55)
+
+    print("\nSUMMARY")
+    print("-" * 55)
+
+    print(f"Unattached volumes: {len(volume_findings)}")
+    print(f"Orphaned snapshots: {len(snapshot_findings)}")
+
+    print(
+        f"\nPotential monthly waste: "
+        f"${total_monthly_cost:.2f}"
+    )
+
+    print(
+        f"Potential annual waste:  "
+        f"${total_annual_cost:.2f}"
+    )
+
+    print("\nFINDINGS")
+    print("-" * 55)
+
+    if not all_findings:
+        print("No potential EBS waste detected.")
+        return
+
+    for finding in all_findings:
+        print(f"\n[{finding['resource_type']}]")
+        print(f"ID: {finding['resource_id']}")
+        print(f"Reason: {finding['reason']}")
+        print(f"Size: {finding['size_gb']} GB")
+        print(
+            f"Estimated monthly cost: "
+            f"${finding['estimated_monthly_cost']:.2f}"
+        )
 
 
 # -----------------------------
@@ -118,22 +167,10 @@ def main():
         volume_ids
     )
 
-    print("AWS EBS COST AUDIT")
-    print("----------------------------")
-
-    print(f"Volumes found: {len(volumes)}")
-    print(f"Snapshots found: {len(snapshots)}")
-
-    print("\nVolume Findings:")
-
-    for finding in volume_findings:
-        print(finding)
-
-    print("\nSnapshot Findings:")
-
-    for finding in snapshot_findings:
-        print(finding)
-
+    generate_report(
+        volume_findings,
+        snapshot_findings
+    )
 
 
 if __name__ == "__main__":
